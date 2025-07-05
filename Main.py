@@ -63,11 +63,6 @@ frame_dealer.pack(pady=10)
 frame_spieler = tk.Frame(root, bg="#2d2d2d")
 frame_spieler.pack(pady=10)
 
-#Punktestände anzeigen
-dealer_label = tk.Label(root, text="Dealer: 0", bg="#2d2d2d", fg="white", font=("Arial", 12, "bold"))
-dealer_label.pack()
-spieler_label = tk.Label(root, text="Spieler: 0", bg="#2d2d2d", fg="white", font=("Arial", 12, "bold"))
-spieler_label.pack()
 
 #Guthaben anzeigen
 guthaben_label = tk.Label(root, text=f"Guthaben: {guthaben} €", bg="#2d2d2d", fg="white", font=("Arial", 12, "bold"))
@@ -105,39 +100,57 @@ spiel_beendet = False
 #GUI aktualisieren (Karten und Punkte anzeigen)
 def update_gui(dealer_offen=False):
     if len(spieler_karten) == 0 or aktuelle_hand >= len(spieler_karten):
-        return  # Schutz vor Zugriff außerhalb der Liste
+        return
 
-    #Dealer-Karten anzeigen
-    for widget in frame_dealer.winfo_children():
-        widget.destroy()
-    for i, karte in enumerate(dealer_karten):
-        img = karten_bilder[karte] if dealer_offen or i == 0 else karten_bilder["BACK"]
+    #Dealer-Bereich
+    for w in frame_dealer.winfo_children():
+        w.destroy()
+
+    sichtbare_karten = dealer_karten if dealer_offen else dealer_karten[:1]
+    punkte_dealer = berechne_punkte(sichtbare_karten)
+    tk.Label(
+        frame_dealer,
+        text=f"Dealer: {punkte_dealer}",          #Beschriftung + Punkte
+        fg="white", bg="#2d2d2d",
+        font=("Arial", 14, "bold")
+    ).pack(side="left", padx=(0, 10))
+
+    for i, k in enumerate(dealer_karten):
+        img = karten_bilder[k] if dealer_offen or i == 0 else karten_bilder["BACK"]
         tk.Label(frame_dealer, image=img, bg="#2d2d2d").pack(side="left", padx=5)
 
-    # Spieler-Karten anzeigen
-    for widget in frame_spieler.winfo_children():
-        widget.destroy()
+    #Spieler-Bereich
+    for w in frame_spieler.winfo_children():
+        w.destroy()
 
     for i, hand in enumerate(spieler_karten):
         hand_frame = tk.Frame(frame_spieler, bg="#2d2d2d")
         hand_frame.pack(side="left", padx=20)
 
-        for karte in hand:
-            img = karten_bilder[karte]
-            tk.Label(hand_frame, image=img, bg="#2d2d2d").pack(side="left", padx=2)
+        punkte_hand = berechne_punkte(hand)
+        farbe = "white" if i == aktuelle_hand else "gray"
 
-        # Aktive Hand visuell hervorheben
-        if i == aktuelle_hand:
-            tk.Label(hand_frame, text=f"Hand {i + 1} (aktiv)", fg="white", bg="#2d2d2d", font=("Arial", 10)).pack()
-        else:
-            tk.Label(hand_frame, text=f"Hand {i + 1}", fg="gray", bg="#2d2d2d", font=("Arial", 10)).pack()
+        # Beschriftung Spieler (oder „Spieler 2“ nach Split) + Punkte
+        label_text = f"Spieler{'' if len(spieler_karten)==1 else ' ' + str(i+1)}: {punkte_hand}"
+        tk.Label(
+            hand_frame,
+            text=label_text,
+            fg=farbe, bg="#2d2d2d",
+            font=("Arial", 14, "bold")
+        ).pack(side="left", padx=(0, 10))
+
+        for k in hand:
+            tk.Label(hand_frame, image=karten_bilder[k], bg="#2d2d2d").pack(side="left", padx=2)
+
+        tk.Label(
+            hand_frame,
+            text=f"Hand {i + 1}{' (aktiv)' if i == aktuelle_hand else ''}",
+            fg=farbe, bg="#2d2d2d",
+            font=("Arial", 10)
+        ).pack()
 
 
-    #Punktestände aktualisieren
-    punkte_spieler = berechne_punkte(spieler_karten[aktuelle_hand])
-    punkte_dealer = berechne_punkte(dealer_karten if dealer_offen else dealer_karten[1:])
-    spieler_label.config(text=f"Spieler: {punkte_spieler}")
-    dealer_label.config(text=f"Dealer: {punkte_dealer}")
+
 
 
 def zeige_info():
@@ -147,6 +160,7 @@ def zeige_info():
         info_fenster.lift()  # Fenster in den Vordergrund holen
         return
 
+    #Anleitung
     info_text = (
         "Anleitung – Blackjack \n\n"
         "Ziel des Spiels:\n"
@@ -242,22 +256,30 @@ def hit():
         return
     spieler_karten[aktuelle_hand].append(ziehe_karte())
     update_gui()
+
+    #Bust
     if berechne_punkte(spieler_karten[aktuelle_hand]) > 21:
         status_label.config(text="Überkauft! Dealer gewinnt.")
-        spiel_beendet = True
-        update_gui(dealer_offen=True)
+        stand()
+        return
+
+    #Genau 21 Punktr
+    elif berechne_punkte(spieler_karten[aktuelle_hand]) == 21:
+        status_label.config(text="21 erreicht – du bleibst stehen.")
+        stand()
+        return
 
 #Spieler bleibt stehen, Dealer zieht und Ergebnis wird ausgewertet
 def stand():
     global aktuelle_hand, spiel_beendet
 
-    if splitting and aktuelle_hand == 0:
+    if splitting and aktuelle_hand == 0:                  #beim splitt von Hand 1 auf Hand 2
         aktuelle_hand = 1
         status_label.config(text="Zweite Hand spielen…")
         update_gui()
         return
 
-    while berechne_punkte(dealer_karten) < 17:
+    while berechne_punkte(dealer_karten) < 17:     #Dealer zieht bis 17
         dealer_karten.append(ziehe_karte())
 
     update_gui(dealer_offen=True)
@@ -354,3 +376,4 @@ tk.Button(btn_frame, text="Info", command=zeige_info, bg="#607d8b", fg="white", 
 #Spiel starten
 neue_runde()
 root.mainloop()
+
